@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#050505">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.png">
+<title>Fingerprint Animation</title>
+<style>
+:root{--red:#ff1744;--panel:#141414;--muted:#bdbdbd}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{height:100%;margin:0}
+body{background:#050505;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;touch-action:manipulation;transition:background .3s}
+#cv{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#zone{position:fixed;z-index:1;border:0;background:none;padding:0}
+.z-scanner #zone{width:280px;height:280px;max-width:80vw;max-height:80vw;left:50%;top:45%;transform:translate(-50%,-50%);border-radius:50%}
+.z-bottom #zone{left:0;right:0;bottom:0;height:45%;border-top:1px dashed #ffffff30}
+.z-full #zone{inset:0}
+.ui{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 20px calc(env(safe-area-inset-bottom,0px) + 16px);pointer-events:none}
+.ui>*{pointer-events:none}
+header{width:100%;display:flex;justify-content:space-between;align-items:center;z-index:5}
+h1{font-size:15px;letter-spacing:2px;margin:0;font-weight:900}
+h1 small{display:block;color:var(--red);font-size:12px;font-weight:400}
+.link{background:none;border:0;color:var(--red);font:600 14px system-ui;letter-spacing:1px;padding:10px;pointer-events:auto}
+#msg{position:absolute;left:0;right:0;top:calc(45% + 170px);text-align:center;padding:0 20px}
+.z-bottom #msg{top:22%}.z-full #msg{top:22%}
+#status{font-size:18px;font-weight:600;margin:0 0 8px}
+.note{color:var(--muted);font-size:13px;margin:4px 0}
+.warn{color:var(--red);font-size:10px;letter-spacing:1px;margin-top:10px}
+#granted{position:absolute;top:35%;text-align:center;padding:0 24px;display:none}
+#granted.on{display:block}#granted *{pointer-events:auto}
+.btn{background:var(--red);color:#fff;border:0;border-radius:20px;padding:12px 22px;font:600 15px system-ui}
+#settings{position:fixed;inset:0;z-index:10;background:#050505;overflow-y:auto;display:none;flex-direction:column;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px calc(env(safe-area-inset-bottom,0px) + 30px)}
+#settings.on{display:flex}
+#settings header{pointer-events:auto}
+.card{background:var(--panel);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card b{color:var(--red)}
+label.row{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:34px}
+label.rad{justify-content:flex-start}
+input[type=password]{background:#000;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:16px;width:100%}
+input[type=range]{width:100%;accent-color:var(--red)}
+input[type=radio],input[type=checkbox]{accent-color:var(--red);width:20px;height:20px}
+.sw{width:18px;height:18px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
+#dlg{position:fixed;inset:0;z-index:20;background:#000b;display:none;align-items:center;justify-content:center;padding:24px}
+#dlg.on{display:flex}#dlg .card{width:100%;max-width:340px}
+.err{color:var(--red);font-size:13px;min-height:1em}
+.actions{display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head>
+<body class="z-scanner">
+<canvas id="cv"></canvas>
+<button id="zone" aria-label="Touch area. Tap to play the animation."></button>
+<div class="ui" id="ui">
+ <header><h1>FINGERPRINT<small>NEON ANIMATION</small></h1><button class="link" id="openSet">SETTINGS</button></header>
+ <div id="msg"><p id="status"></p><p class="note" id="hint"></p><p class="warn">SIMULATION ONLY • DOES NOT UNLOCK YOUR PHONE</p></div>
+ <div id="granted"><p style="font-size:25px;font-weight:700;color:var(--red);margin:0 0 8px">ACCESS GRANTED</p>
+  <p class="note">Animation complete. This is not real biometric authentication.</p>
+  <button class="btn" id="again">Play again</button></div>
+</div>
+
+<div id="settings">
+ <header><h1 style="font-size:24px">SETTINGS</h1><button class="link" id="done">DONE</button></header>
+ <div class="card"><b>Animation style</b><div id="styles"></div>
+  <button class="btn" id="preview">Preview animation</button></div>
+ <div class="card"><b>Touch area</b><span class="note">Where you press to start the animation.</span><div id="zones"></div></div>
+ <div class="card"><b>Color</b><div id="colors"></div></div>
+ <div class="card"><b>Unlock experience</b><div id="modes"></div></div>
+ <div class="card"><b>Effects</b>
+  <label class="row">Sound effects<input type="checkbox" id="sound"></label>
+  <label class="row">Vibration<input type="checkbox" id="vib"></label></div>
+ <div class="card"><b>Animation speed</b><span class="note" id="speedLbl"></span>
+  <input type="range" id="speed" min="0.5" max="2" step="0.1"></div>
+ <div class="card"><b>Background</b><div id="bgs"></div></div>
+ <div class="card"><b>Optional in-app PIN</b>
+  <span class="note">Demo only. Not your phone's screen lock. Leave blank to disable.</span>
+  <input type="password" id="pinSet" inputmode="numeric" placeholder="Set app PIN">
+  <button class="btn" id="pinSave">Save PIN</button></div>
+</div>
+
+<div id="dlg"><div class="card"><b>App PIN</b>
+ <span class="note">Enter the demo PIN to continue. It only gates this app.</span>
+ <input type="password" id="pinIn" inputmode="numeric" placeholder="PIN">
+ <div class="err" id="pinErr"></div>
+ <div class="actions"><button class="link" id="pinCancel">Cancel</button><button class="link" id="pinOk">Continue</button></div></div></div>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var store={get:function(k,d){try{var v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},
+ set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+var STYLES=['Neon Scan','Fingerprint Trace','Pulse Ripple','Radar Sweep','Particle Burst'];
+var ZONES={'Scanner circle':'scanner','Bottom of screen':'bottom','Anywhere on screen':'full'};
+var COLORS={'Neon red':'#ff1744','Cyan':'#18ffff','Green':'#00e676','Violet':'#b388ff'};
+var BG={'Black':'#050505','Deep red':'#190006','Charcoal':'#171717'};
+var MODES=['Manual app launch','Screen wake','Simulated lock-screen experience'];
+var S={style:store.get('style',STYLES[0]),zone:store.get('zone','Scanner circle'),color:store.get('color','Neon red'),
+ mode:store.get('mode',MODES[0]),sound:store.get('sound',true),vib:store.get('vib',true),
+ speed:store.get('speed',1),pin:store.get('pin',''),bg:store.get('bg','Black')};
+var cv=$('cv'),c=cv.getContext('2d'),W,H,anim=null,granted=false,previewing=false,parts=[];
+function size(){var d=window.devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;c.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',size);size();
+function col(){return COLORS[S.color]||COLORS['Neon red']}
+function ctr(){return{x:W/2,y:H*0.45}}
+function R(){return Math.min(110,Math.min(W,H)*0.2)}
+function glow(a,w){c.strokeStyle=col();c.fillStyle=col();c.globalAlpha=a;c.lineWidth=w||3;c.lineCap='round';c.shadowColor=col();c.shadowBlur=14}
+function ring(x,y,r,a,w){glow(a,w);c.beginPath();c.arc(x,y,Math.max(r,0.1),0,7);c.stroke()}
+function fp(x,y,r,prog,a){ // stylized fingerprint, 6 arcs
+ for(var i=0;i<6;i++){var rr=r-i*r*0.105,s=(205+i*5)*Math.PI/180,sw=(245-i*12)*Math.PI/180*prog;
+  glow(a,3.2);c.beginPath();c.arc(x,y,rr,s,s+sw);c.stroke()}}
+function beam(x,y,r,a){glow(a,1.5);c.beginPath();c.moveTo(x-r*1.5,y);c.lineTo(x+r*1.5,y);c.stroke()}
+function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
+
+var draw={
+ 'Neon Scan':function(p,o,r){var k=1+Math.sin(p*Math.PI*6)*0.17;
+  for(var i=0;i<3;i++)ring(o.x,o.y,r*(1.1+i*0.5)*k,.7,3.5);
+  fp(o.x,o.y,r,1,1);beam(o.x,o.y+Math.sin(p*Math.PI*6)*r,r,.95)},
+ 'Fingerprint Trace':function(p,o,r){var q=ease(Math.min(p/0.85,1));fp(o.x,o.y,r,q,1);
+  ring(o.x,o.y,r*1.5,.3*q,2);if(p>.85)ring(o.x,o.y,r*(1.5+(p-.85)*6),1-(p-.85)/.15,3)},
+ 'Pulse Ripple':function(p,o,r){for(var i=0;i<4;i++){var q=p*1.5-i*0.2;if(q>0&&q<1)ring(o.x,o.y,q*r*3.4,1-q,3)}
+  glow(1,1);c.beginPath();c.arc(o.x,o.y,r*0.12*(1+Math.sin(p*30)*.3),0,7);c.fill();fp(o.x,o.y,r*.6,1,.35*(1-p))},
+ 'Radar Sweep':function(p,o,r){for(var i=1;i<=3;i++)ring(o.x,o.y,r*i*0.55,.35,1.5);
+  var a=p*Math.PI*4;for(var j=0;j<24;j++){var aa=a-j*0.04;glow(.9*(1-j/24),3);c.beginPath();c.moveTo(o.x,o.y);
+   c.lineTo(o.x+Math.cos(aa)*r*1.7,o.y+Math.sin(aa)*r*1.7);c.stroke()}
+  fp(o.x,o.y,r*.7,1,Math.min(1,p*2)*.9)},
+ 'Particle Burst':function(p,o,r){glow(1,1);var ph=p<.6;
+  for(var i=0;i<parts.length;i++){var q=parts[i],d;
+   if(ph)d=q.d*(1-ease(p/0.6))*r*3.2;else d=((p-.6)/.4)*r*3.8*q.s;
+   c.globalAlpha=ph?.9:1-(p-.6)/.4;c.beginPath();c.arc(o.x+Math.cos(q.a)*d,o.y+Math.sin(q.a)*d,2.2,0,7);c.fill()}
+  fp(o.x,o.y,r*.8,Math.min(1,p*1.6),ph?.8:1-(p-.6)/.4)}
+};
+function frame(now){
+ c.clearRect(0,0,W,H);c.save();var r=R(),mid=ctr();
+ if(!anim){
+  if(!granted){var z=ZONES[S.zone];
+   if(z==='scanner'){for(var i=0;i<3;i++)ring(mid.x,mid.y,r*(1.1+i*0.5),.28,1.6);fp(mid.x,mid.y,r,1,.85);beam(mid.x,mid.y,r,.35)}
+   else fp(mid.x,mid.y,r,1,.3)}
+ }else{
+  var p=(now-anim.t0)/anim.dur;
+  if(p>=1)finish();else draw[S.style](p,anim.o,r);
+ }
+ c.restore();requestAnimationFrame(frame)}
+
+function beep(f,ms){try{var C=window.AudioContext||window.webkitAudioContext,a=new C(),o=a.createOscillator(),g=a.createGain();
+ o.frequency.value=f;g.gain.value=.15;o.connect(g);g.connect(a.destination);o.start();setTimeout(function(){o.stop();a.close()},ms)}catch(e){}}
+function buzz(p){if(S.vib&&navigator.vibrate){try{navigator.vibrate(p)}catch(e){}}}
+function start(pt){
+ if(anim)return;
+ var o=ZONES[S.zone]==='scanner'?ctr():{x:pt.x,y:pt.y};
+ parts=[];for(var i=0;i<80;i++)parts.push({a:Math.random()*6.283,d:.5+Math.random()*.9,s:.5+Math.random()*.9});
+ anim={t0:performance.now(),dur:1800/S.speed,o:o};
+ if(S.sound)beep(880,140);buzz(90);label()}
+function finish(){anim=null;
+ if(previewing){previewing=false;label();return}
+ granted=true;if(S.sound)beep(1320,180);buzz([60,40,60]);
+ $('granted').classList.add('on');$('msg').style.display='none';label()}
+function label(){
+ $('status').textContent=anim?'SCANNING...':S.mode==='Simulated lock-screen experience'?'SIMULATED LOCK SCREEN':S.mode==='Screen wake'?'SCREEN-WAKE DEMO':'TOUCH TO UNLOCK';
+ var z=ZONES[S.zone];
+ $('hint').textContent=anim?'Please wait for the animation':z==='scanner'?'Tap the fingerprint to play the animation':z==='bottom'?'Tap the bottom of the screen':'Tap anywhere on the screen';
+ document.body.className='z-'+z}
+
+var pend=null;
+$('zone').addEventListener('pointerdown',function(e){
+ if(anim||granted)return;
+ var pt={x:e.clientX,y:e.clientY};
+ if(S.pin){pend=pt;$('pinIn').value='';$('pinErr').textContent='';$('dlg').classList.add('on');$('pinIn').focus()}else start(pt)});
+$('pinCancel').onclick=function(){$('dlg').classList.remove('on')};
+$('pinOk').onclick=function(){if($('pinIn').value===S.pin){$('dlg').classList.remove('on');start(pend||ctr())}else $('pinErr').textContent='PIN does not match.'};
+$('again').onclick=function(){granted=false;$('granted').classList.remove('on');$('msg').style.display='';label()};
+
+function show(on){$('settings').classList.toggle('on',on)}
+function radios(host,name,items,cur,cb){host.innerHTML='';items.forEach(function(v){
+ var l=document.createElement('label');l.className='row rad';
+ var sw=COLORS[v]?'<i class="sw" style="background:'+COLORS[v]+'"></i>':'';
+ l.innerHTML='<input type="radio" name="'+name+'"'+(v===cur?' checked':'')+'><span>'+sw+v+'</span>';
+ l.firstChild.onchange=function(){cb(v)};host.appendChild(l)})}
+function sv(k,v){S[k]=v;store.set(k,v)}
+function speedLbl(){$('speedLbl').textContent=S.speed<0.8?'Slow':S.speed>1.3?'Fast':'Normal'}
+$('openSet').onclick=function(){
+ radios($('styles'),'st',STYLES,S.style,function(v){sv('style',v)});
+ radios($('zones'),'zn',Object.keys(ZONES),S.zone,function(v){sv('zone',v);label()});
+ radios($('colors'),'cl',Object.keys(COLORS),S.color,function(v){sv('color',v);document.documentElement.style.setProperty('--red',COLORS[v])});
+ radios($('modes'),'md',MODES,S.mode,function(v){sv('mode',v);label()});
+ radios($('bgs'),'bg',Object.keys(BG),S.bg,function(v){sv('bg',v);applyBg()});
+ $('sound').checked=S.sound;$('vib').checked=S.vib;$('speed').value=S.speed;$('pinSet').value=S.pin;speedLbl();show(true)};
+$('done').onclick=function(){show(false);label()};
+$('preview').onclick=function(){show(false);granted=false;$('granted').classList.remove('on');$('msg').style.display='';label();
+ previewing=true;setTimeout(function(){start(ctr())},150)};
+$('sound').onchange=function(){sv('sound',this.checked)};
+$('vib').onchange=function(){sv('vib',this.checked)};
+$('speed').oninput=function(){sv('speed',parseFloat(this.value));speedLbl()};
+$('pinSave').onclick=function(){sv('pin',$('pinSet').value);var b=this;b.textContent='Saved';setTimeout(function(){b.textContent='Save PIN'},1200)};
+function applyBg(){document.body.style.background=BG[S.bg]||BG.Black}
+document.documentElement.style.setProperty('--red',col());
+applyBg();label();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

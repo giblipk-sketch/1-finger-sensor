@@ -1,0 +1,18 @@
+FINGERPRINT ANIMATION - INSTALL GUIDE
+
+A) FASTEST (no APK, no errors): install from a link
+   1. Upload index.html, manifest.json and icon.png to any free HTTPS host
+      (GitHub Pages, Netlify Drop, Cloudflare Pages).
+   2. Open the link in Chrome on your Android phone.
+   3. Menu (3 dots) > "Add to Home screen" / "Install app".
+
+B) REAL APK via GitHub Actions (signed, installs cleanly)
+   1. Create a GitHub repo, upload the CONTENTS of the "android-project" folder.
+   2. Actions tab > "Build APK" > Run workflow.
+   3. Download the "FingerprintAnimation-debug-apk" artifact, unzip, install the .apk.
+   4. If asked, allow "Install unknown apps" for your browser/file manager.
+
+C) ZIP-to-APK converter
+   Use FingerprintAnimation_converter.zip (index.html at the root).
+   If the APK says "problem parsing the package", the converter's APK is
+   unsigned or invalid - use option A or B instead.
